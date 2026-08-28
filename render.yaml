@@ -1,0 +1,73 @@
+services:
+  # ----------------------------------------------------
+  # Healthcare Backend API
+  # ----------------------------------------------------
+  - type: web
+    name: healthcare-backend
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        sync: false # Requires manual entry in Render Dashboard
+      - key: GROQ_API_KEY
+        sync: false # Requires manual entry in Render Dashboard
+      - key: N8N_WEBHOOK_URL
+        sync: false # e.g. https://healthcare-n8n.onrender.com
+
+  # ----------------------------------------------------
+  # n8n Workflow Orchestrator
+  # ----------------------------------------------------
+  - type: web
+    name: healthcare-n8n
+    env: docker
+    dockerfilePath: ./Dockerfile.n8n
+    plan: free
+    envVars:
+      # n8n Basic Authentication
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: "true"
+      - key: N8N_BASIC_AUTH_USER
+        sync: false
+      - key: N8N_BASIC_AUTH_PASSWORD
+        sync: false
+        
+      # n8n General Configuration
+      - key: N8N_HOST
+        value: "0.0.0.0"
+      - key: N8N_PORT
+        value: "5678"
+      - key: N8N_PROTOCOL
+        value: "https"
+      - key: WEBHOOK_URL
+        sync: false # E.g., https://healthcare-n8n.onrender.com
+      - key: N8N_ENCRYPTION_KEY
+        sync: false # Needs a random string
+        
+      # Database Configuration
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_DATABASE
+        sync: false
+      - key: DB_POSTGRESDB_HOST
+        sync: false
+      - key: DB_POSTGRESDB_PASSWORD
+        sync: false
+      - key: DB_POSTGRESDB_PORT
+        value: "5432"
+      - key: DB_POSTGRESDB_USER
+        sync: false
+        
+      # Performance / Limitations for Free Tier
+      - key: EXECUTIONS_DATA_PRUNE
+        value: "true"
+      - key: EXECUTIONS_DATA_MAX_AGE
+        value: "168"
+      - key: NODE_FUNCTION_ALLOW_BUILTIN
+        value: "*"

@@ -1,0 +1,297 @@
+{
+  "name": "01 - Healthcare Orchestrator — Patient Intake Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "patient-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-intake",
+      "name": "📥 Patient Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "patient-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input Validation\nconst body = $input.first().json.body || $input.first().json;\n\nconst errors = [];\nif (!body.full_name || body.full_name.trim().length < 2) errors.push('full_name required');\nif (!body.email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(body.email)) errors.push('valid email required');\nif (!body.symptoms || body.symptoms.trim().length < 5) errors.push('symptoms required (min 5 chars)');\nif (body.age && (parseInt(body.age) < 0 || parseInt(body.age) > 150)) errors.push('invalid age');\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors, status: 400 } }];\n}\n\n// Sanitize\nreturn [{ json: {\n  valid: true,\n  full_name: body.full_name.trim(),\n  email: body.email.trim().toLowerCase(),\n  symptoms: body.symptoms.trim(),\n  date_of_birth: body.date_of_birth || null,\n  age: body.age ? parseInt(body.age) : null,\n  phone: (body.phone || '').trim(),\n  severity: body.severity || 'MILD',\n  symptom_duration: body.symptom_duration || '',\n  existing_conditions: body.existing_conditions || '',\n  current_medications: body.current_medications || '',\n  allergies: body.allergies || '',\n  preferred_appointment_time: body.preferred_appointment_time || '',\n  preferred_communication: body.preferred_communication || 'email',\n  correlation_id: require('crypto').randomUUID()\n}}];"
+      },
+      "id": "validate-input",
+      "name": "🔍 Validate & Sanitize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-valid",
+      "name": "✅ Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'VALIDATION_ERROR', errors: $json.errors }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-error",
+      "name": "❌ Validation Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        880,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO patient_intake (full_name, email, symptoms, severity, symptom_duration, existing_conditions, current_medications, allergies, age, phone, date_of_birth, preferred_appointment_time, preferred_communication, correlation_id, status, processing_started_at, raw_payload)\nVALUES ('{{ $json.full_name }}', '{{ $json.email }}', '{{ $json.symptoms.replace(/'/g, \"''\") }}', '{{ $json.severity }}', '{{ $json.symptom_duration }}', '{{ $json.existing_conditions.replace(/'/g, \"''\") }}', '{{ $json.current_medications.replace(/'/g, \"''\") }}', '{{ $json.allergies }}', {{ $json.age || 'NULL' }}, '{{ $json.phone }}', {{ $json.date_of_birth ? \"'\" + $json.date_of_birth + \"'\" : 'NULL' }}, '{{ $json.preferred_appointment_time }}', '{{ $json.preferred_communication }}', '{{ $json.correlation_id }}', 'PROCESSING', NOW(), '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb)\nRETURNING *;",
+        "options": {}
+      },
+      "id": "create-intake",
+      "name": "📝 Create Intake Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthcare PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM patients WHERE email = '{{ $json.email }}' LIMIT 1;",
+        "options": {}
+      },
+      "id": "find-patient",
+      "name": "🔎 Find Existing Patient",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthcare PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quick Safety Pre-Scan (deterministic)\nconst symptoms = ($input.first().json.symptoms || '').toLowerCase();\n\nconst EMERGENCY_PATTERNS = [\n  /chest\\s*(pain|pressure|tightness)/i,\n  /heart\\s*attack/i,\n  /(severe|significant)\\s*(difficulty|trouble)\\s*(breathing|breath)/i,\n  /can\\s*'?t\\s*breathe/i,\n  /stroke/i,\n  /loss\\s*of\\s*consciousness/i,\n  /suicid/i,\n  /self[\\s-]*harm/i,\n  /anaphyla/i,\n  /(severe|heavy|uncontrolled)\\s*bleed/i,\n  /seizure|convulsion/i,\n  /overdos/i,\n];\n\nconst triggered = [];\nfor (const pattern of EMERGENCY_PATTERNS) {\n  if (pattern.test(symptoms)) {\n    triggered.push(pattern.toString());\n  }\n}\n\nreturn [{ json: {\n  ...$input.first().json,\n  quick_scan: {\n    has_emergency_indicators: triggered.length > 0,\n    triggered_count: triggered.length,\n    triggered_patterns: triggered\n  }\n}}];"
+      },
+      "id": "safety-prescan",
+      "name": "🛡️ Quick Safety Pre-Scan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'PROCESSING', message: 'Intake received and being processed', intake_id: $('📝 Create Intake Record').first().json.id, correlation_id: $json.correlation_id }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "respond-success",
+      "name": "✅ Intake Accepted Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_logs (event_type, correlation_id, intake_id, action, result, details)\nVALUES ('INTAKE_CREATED', '{{ $json.correlation_id }}', '{{ $('📝 Create Intake Record').first().json.id }}', 'Patient intake received via n8n webhook', 'success', '{\"source\": \"n8n\", \"has_emergency_indicators\": {{ $json.quick_scan.has_emergency_indicators }}}'::jsonb);",
+        "options": {}
+      },
+      "id": "audit-intake",
+      "name": "📋 Audit: Intake Created",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthcare PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🏥 Healthcare AI Orchestrator\n### Patient Intake Pipeline\n\n**Flow:**\n1. Webhook receives intake\n2. Validate & sanitize input\n3. Create intake record in DB\n4. Find/create patient\n5. Quick safety pre-scan\n6. Respond to webhook\n7. Audit log entry\n\n**⚠️ DEMO PROJECT**\nSynthetic data only.",
+        "width": 320,
+        "height": 300,
+        "color": 4
+      },
+      "id": "sticky-orchestrator",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🛡️ Safety Engine\nDeterministic keyword matching\nfor emergency detection.\n\n**Cannot be overridden by AI.**",
+        "width": 250,
+        "height": 150,
+        "color": 6
+      },
+      "id": "sticky-safety",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        -20
+      ]
+    }
+  ],
+  "connections": {
+    "📥 Patient Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "🔍 Validate & Sanitize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Validate & Sanitize Input": {
+      "main": [
+        [
+          {
+            "node": "✅ Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Valid?": {
+      "main": [
+        [
+          {
+            "node": "📝 Create Intake Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Validation Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Create Intake Record": {
+      "main": [
+        [
+          {
+            "node": "🔎 Find Existing Patient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Find Existing Patient": {
+      "main": [
+        [
+          {
+            "node": "🛡️ Quick Safety Pre-Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Quick Safety Pre-Scan": {
+      "main": [
+        [
+          {
+            "node": "✅ Intake Accepted Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Intake Accepted Response": {
+      "main": [
+        [
+          {
+            "node": "📋 Audit: Intake Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Healthcare AI"
+    },
+    {
+      "name": "Intake"
+    },
+    {
+      "name": "Orchestrator"
+    }
+  ]
+}

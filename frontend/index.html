@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Healthcare AI Platform — Patient Intake Form. Submit your information for AI-assisted triage and appointment scheduling.">
+  <title>Patient Intake — Healthcare AI Platform</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand">
+        <div class="logo-icon">🏥</div>
+        Healthcare AI Platform
+      </a>
+      <ul class="nav-links">
+        <li><a href="/" class="active">Patient Intake</a></li>
+        <li><a href="/dashboard.html">Admin Dashboard</a></li>
+        <li><a href="/doctor.html">Doctor View</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Patient Intake & Triage</h1>
+    <p>AI-assisted administrative triage • Automated appointment scheduling</p>
+  </section>
+
+  <!-- Intake Form -->
+  <div class="container">
+    <div class="intake-form-container">
+      <div class="ai-disclaimer" style="margin-bottom: var(--space-lg);">
+        ⚠️ <strong>DEMO PROJECT</strong> — This is a portfolio project using synthetic data only. Not a real medical system. Do not enter real patient information.
+      </div>
+
+      <form id="intake-form" novalidate>
+        <!-- Personal Information -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <div class="section-header">
+            <div class="section-icon blue">👤</div>
+            <h2>Personal Information</h2>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="full_name">Full Name *</label>
+              <input type="text" id="full_name" name="full_name" class="form-input" placeholder="John Doe" required minlength="2" maxlength="200">
+              <div class="form-error" id="error-full_name"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="email">Email *</label>
+              <input type="email" id="email" name="email" class="form-input" placeholder="patient@example.com" required>
+              <div class="form-error" id="error-email"></div>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="date_of_birth">Date of Birth</label>
+              <input type="date" id="date_of_birth" name="date_of_birth" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="age">Age</label>
+              <input type="number" id="age" name="age" class="form-input" placeholder="35" min="0" max="150">
+              <div class="form-error" id="error-age"></div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" class="form-input" placeholder="+1-555-0100">
+          </div>
+        </div>
+
+        <!-- Symptoms -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <div class="section-header">
+            <div class="section-icon orange">🩺</div>
+            <h2>Symptoms & Concerns</h2>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="symptoms">Describe your symptoms *</label>
+            <textarea id="symptoms" name="symptoms" class="form-textarea" placeholder="Please describe what you're experiencing..." required minlength="5" maxlength="5000" rows="4"></textarea>
+            <div class="form-error" id="error-symptoms"></div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="symptom_duration">How long have you had these symptoms?</label>
+              <input type="text" id="symptom_duration" name="symptom_duration" class="form-input" placeholder="e.g., 3 days, 2 weeks">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="severity">Severity</label>
+              <select id="severity" name="severity" class="form-select">
+                <option value="MILD">Mild</option>
+                <option value="MODERATE">Moderate</option>
+                <option value="SEVERE">Severe</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medical Background -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <div class="section-header">
+            <div class="section-icon green">📋</div>
+            <h2>Medical Background</h2>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="existing_conditions">Existing Conditions</label>
+            <textarea id="existing_conditions" name="existing_conditions" class="form-textarea" placeholder="e.g., Hypertension, Diabetes, Asthma (separate with commas)" rows="2"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="current_medications">Current Medications</label>
+            <textarea id="current_medications" name="current_medications" class="form-textarea" placeholder="e.g., Lisinopril 10mg daily, Metformin 500mg twice daily" rows="2"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="allergies">Allergies</label>
+            <input type="text" id="allergies" name="allergies" class="form-input" placeholder="e.g., Penicillin, Sulfa drugs">
+          </div>
+        </div>
+
+        <!-- Preferences -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <div class="section-header">
+            <div class="section-icon purple">📅</div>
+            <h2>Appointment Preferences</h2>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="preferred_appointment_time">Preferred Date/Time</label>
+              <input type="text" id="preferred_appointment_time" name="preferred_appointment_time" class="form-input" placeholder="e.g., Next Monday morning">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="preferred_communication">Preferred Contact Method</label>
+              <select id="preferred_communication" name="preferred_communication" class="form-select">
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="sms">SMS</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1rem;">
+          Submit Intake Form
+        </button>
+      </form>
+
+      <!-- Results -->
+      <div id="result-panel" class="result-panel" style="display: none;"></div>
+    </div>
+  </div>
+
+  <!-- Disclaimer Footer -->
+  <div class="disclaimer-bar">
+    ⚠️ PORTFOLIO PROJECT — Uses synthetic data only. Not HIPAA compliant. Not a clinical diagnostic system. Must not be connected to real patient information.
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/intake.js"></script>
+</body>
+</html>

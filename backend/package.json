@@ -1,0 +1,22 @@
+{
+  "name": "healthcare-ai-backend",
+  "version": "1.0.0",
+  "description": "Healthcare AI Patient Intake, Risk Triage & Care Coordination — Backend API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "uuid": "^10.0.0",
+    "groq-sdk": "^0.8.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

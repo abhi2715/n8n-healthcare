@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Healthcare AI Platform — Doctor Dashboard. View upcoming appointments, patient summaries, and AI triage briefs.">
+  <title>Doctor Dashboard — Healthcare AI Platform</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><div class="logo-icon">🏥</div> Healthcare AI Platform</a>
+      <ul class="nav-links">
+        <li><a href="/">Patient Intake</a></li>
+        <li><a href="/dashboard.html">Admin Dashboard</a></li>
+        <li><a href="/doctor.html" class="active">Doctor View</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Doctor Dashboard</h1>
+      <p>View upcoming appointments and patient preparation briefs</p>
+    </div>
+
+    <div class="ai-disclaimer" style="margin-bottom: var(--space-lg);">
+      ⚠️ All AI-generated content is clearly marked and requires clinician review before any clinical action.
+    </div>
+
+    <!-- Doctor Selector -->
+    <div class="card" style="margin-bottom: var(--space-lg);">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label" for="doctor-select">Select Doctor</label>
+        <select id="doctor-select" class="form-select" onchange="loadDoctorView()">
+          <option value="">— Select a doctor —</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Doctor Info -->
+    <div id="doctor-info" style="display: none;">
+      <div id="doctor-details" class="card" style="margin-bottom: var(--space-lg);"></div>
+      
+      <h2 style="margin-bottom: var(--space-md); font-size: var(--font-size-xl);">📅 Upcoming Appointments</h2>
+      <div id="appointments-list"></div>
+    </div>
+  </div>
+
+  <!-- Brief Modal -->
+  <div id="brief-modal" class="modal-backdrop">
+    <div class="modal" style="max-width: 700px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-md);">
+        <h3 class="modal-title">Doctor Preparation Brief</h3>
+        <button class="btn btn-sm btn-secondary" onclick="closeBriefModal()">✕ Close</button>
+      </div>
+      <div class="ai-disclaimer" style="margin-bottom: var(--space-md);">
+        ⚠️ AI-GENERATED BRIEF — All content requires clinician review. This is NOT a diagnosis.
+      </div>
+      <div id="brief-content"></div>
+    </div>
+  </div>
+
+  <div class="disclaimer-bar">
+    ⚠️ PORTFOLIO PROJECT — Uses synthetic data only. Not HIPAA compliant. AI assessments are administrative aids only and require clinician review.
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/doctor.js"></script>
+</body>
+</html>

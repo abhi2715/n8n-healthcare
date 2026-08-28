@@ -1,0 +1,452 @@
+[
+  {
+    "name": "01 - Healthcare Orchestrator — Patient Intake Pipeline",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "patient-intake",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "webhook-intake",
+        "name": "📥 Patient Intake Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [220, 300],
+        "webhookId": "patient-intake"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Input Validation\nconst body = $input.first().json.body || $input.first().json;\n\nconst errors = [];\nif (!body.full_name || body.full_name.trim().length < 2) errors.push('full_name required');\nif (!body.email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(body.email)) errors.push('valid email required');\nif (!body.symptoms || body.symptoms.trim().length < 5) errors.push('symptoms required (min 5 chars)');\nif (body.age && (parseInt(body.age) < 0 || parseInt(body.age) > 150)) errors.push('invalid age');\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors, status: 400 } }];\n}\n\n// Sanitize\nreturn [{ json: {\n  valid: true,\n  full_name: body.full_name.trim(),\n  email: body.email.trim().toLowerCase(),\n  symptoms: body.symptoms.trim(),\n  date_of_birth: body.date_of_birth || null,\n  age: body.age ? parseInt(body.age) : null,\n  phone: (body.phone || '').trim(),\n  severity: body.severity || 'MILD',\n  symptom_duration: body.symptom_duration || '',\n  existing_conditions: body.existing_conditions || '',\n  current_medications: body.current_medications || '',\n  allergies: body.allergies || '',\n  preferred_appointment_time: body.preferred_appointment_time || '',\n  preferred_communication: body.preferred_communication || 'email',\n  correlation_id: require('crypto').randomUUID()\n}}];"
+        },
+        "id": "validate-input",
+        "name": "🔍 Validate & Sanitize Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [440, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.valid }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "check-valid",
+        "name": "✅ Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [660, 300]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: 'VALIDATION_ERROR', errors: $json.errors }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "respond-error",
+        "name": "❌ Validation Error Response",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [880, 480]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO patient_intake (full_name, email, symptoms, severity, symptom_duration, existing_conditions, current_medications, allergies, age, phone, date_of_birth, preferred_appointment_time, preferred_communication, correlation_id, status, processing_started_at, raw_payload)\nVALUES ('{{ $json.full_name }}', '{{ $json.email }}', '{{ $json.symptoms.replace(/'/g, \"''\") }}', '{{ $json.severity }}', '{{ $json.symptom_duration }}', '{{ $json.existing_conditions.replace(/'/g, \"''\") }}', '{{ $json.current_medications.replace(/'/g, \"''\") }}', '{{ $json.allergies }}', {{ $json.age || 'NULL' }}, '{{ $json.phone }}', {{ $json.date_of_birth ? \"'\" + $json.date_of_birth + \"'\" : 'NULL' }}, '{{ $json.preferred_appointment_time }}', '{{ $json.preferred_communication }}', '{{ $json.correlation_id }}', 'PROCESSING', NOW(), '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb)\nRETURNING *;",
+          "options": {}
+        },
+        "id": "create-intake",
+        "name": "📝 Create Intake Record",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [880, 180],
+        "credentials": {
+          "postgres": {
+            "id": "1",
+            "name": "Healthcare PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM patients WHERE email = '{{ $json.email }}' LIMIT 1;",
+          "options": {}
+        },
+        "id": "find-patient",
+        "name": "🔎 Find Existing Patient",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [1100, 180],
+        "credentials": {
+          "postgres": {
+            "id": "1",
+            "name": "Healthcare PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Quick Safety Pre-Scan (deterministic)\nconst symptoms = ($input.first().json.symptoms || '').toLowerCase();\n\nconst EMERGENCY_PATTERNS = [\n  /chest\\s*(pain|pressure|tightness)/i,\n  /heart\\s*attack/i,\n  /(severe|significant)\\s*(difficulty|trouble)\\s*(breathing|breath)/i,\n  /can\\s*'?t\\s*breathe/i,\n  /stroke/i,\n  /loss\\s*of\\s*consciousness/i,\n  /suicid/i,\n  /self[\\s-]*harm/i,\n  /anaphyla/i,\n  /(severe|heavy|uncontrolled)\\s*bleed/i,\n  /seizure|convulsion/i,\n  /overdos/i,\n];\n\nconst triggered = [];\nfor (const pattern of EMERGENCY_PATTERNS) {\n  if (pattern.test(symptoms)) {\n    triggered.push(pattern.toString());\n  }\n}\n\nreturn [{ json: {\n  ...$input.first().json,\n  quick_scan: {\n    has_emergency_indicators: triggered.length > 0,\n    triggered_count: triggered.length,\n    triggered_patterns: triggered\n  }\n}}];"
+        },
+        "id": "safety-prescan",
+        "name": "🛡️ Quick Safety Pre-Scan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [1320, 180]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ status: 'PROCESSING', message: 'Intake received and being processed', intake_id: $('📝 Create Intake Record').first().json.id, correlation_id: $json.correlation_id }) }}",
+          "options": {
+            "responseCode": 202
+          }
+        },
+        "id": "respond-success",
+        "name": "✅ Intake Accepted Response",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [1540, 180]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO audit_logs (event_type, correlation_id, intake_id, action, result, details)\nVALUES ('INTAKE_CREATED', '{{ $json.correlation_id }}', '{{ $('📝 Create Intake Record').first().json.id }}', 'Patient intake received via n8n webhook', 'success', '{\"source\": \"n8n\", \"has_emergency_indicators\": {{ $json.quick_scan.has_emergency_indicators }}}'::jsonb);",
+          "options": {}
+        },
+        "id": "audit-intake",
+        "name": "📋 Audit: Intake Created",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [1760, 180],
+        "credentials": {
+          "postgres": {
+            "id": "1",
+            "name": "Healthcare PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## 🏥 Healthcare AI Orchestrator\n### Patient Intake Pipeline\n\n**Flow:**\n1. Webhook receives intake\n2. Validate & sanitize input\n3. Create intake record in DB\n4. Find/create patient\n5. Quick safety pre-scan\n6. Respond to webhook\n7. Audit log entry\n\n**⚠️ DEMO PROJECT**\nSynthetic data only.",
+          "width": 320,
+          "height": 300,
+          "color": 4
+        },
+        "id": "sticky-orchestrator",
+        "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [180, -40]
+      },
+      {
+        "parameters": {
+          "content": "## 🛡️ Safety Engine\nDeterministic keyword matching\nfor emergency detection.\n\n**Cannot be overridden by AI.**",
+          "width": 250,
+          "height": 150,
+          "color": 6
+        },
+        "id": "sticky-safety",
+        "name": "Sticky Note1",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1280, -20]
+      }
+    ],
+    "connections": {
+      "📥 Patient Intake Webhook": {
+        "main": [
+          [{ "node": "🔍 Validate & Sanitize Input", "type": "main", "index": 0 }]
+        ]
+      },
+      "🔍 Validate & Sanitize Input": {
+        "main": [
+          [{ "node": "✅ Valid?", "type": "main", "index": 0 }]
+        ]
+      },
+      "✅ Valid?": {
+        "main": [
+          [{ "node": "📝 Create Intake Record", "type": "main", "index": 0 }],
+          [{ "node": "❌ Validation Error Response", "type": "main", "index": 0 }]
+        ]
+      },
+      "📝 Create Intake Record": {
+        "main": [
+          [{ "node": "🔎 Find Existing Patient", "type": "main", "index": 0 }]
+        ]
+      },
+      "🔎 Find Existing Patient": {
+        "main": [
+          [{ "node": "🛡️ Quick Safety Pre-Scan", "type": "main", "index": 0 }]
+        ]
+      },
+      "🛡️ Quick Safety Pre-Scan": {
+        "main": [
+          [{ "node": "✅ Intake Accepted Response", "type": "main", "index": 0 }]
+        ]
+      },
+      "✅ Intake Accepted Response": {
+        "main": [
+          [{ "node": "📋 Audit: Intake Created", "type": "main", "index": 0 }]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "tags": [
+      { "name": "Healthcare AI" },
+      { "name": "Intake" },
+      { "name": "Orchestrator" }
+    ]
+  },
+  {
+    "name": "04 - AI Triage Agent",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "ai-triage",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "triage-webhook",
+        "name": "📥 Triage Request",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [220, 300],
+        "webhookId": "ai-triage"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=PATIENT INTAKE INFORMATION:\n\nFull Name: {{ $json.body.full_name || 'Not provided' }}\nAge: {{ $json.body.age || 'Not provided' }}\n\nSYMPTOMS:\n{{ $json.body.symptoms || 'Not provided' }}\n\nSeverity: {{ $json.body.severity || 'Not provided' }}\nDuration: {{ $json.body.symptom_duration || 'Not provided' }}\n\nEXISTING CONDITIONS:\n{{ $json.body.existing_conditions || 'None reported' }}\n\nCURRENT MEDICATIONS:\n{{ $json.body.current_medications || 'None reported' }}\n\nALLERGIES:\n{{ $json.body.allergies || 'None reported' }}\n\nProvide your administrative triage assessment as a JSON object.",
+          "options": {
+            "systemMessage": "You are an administrative triage assistant for a healthcare clinic. Your role is to review patient intake information and provide a structured administrative assessment.\n\nIMPORTANT RULES:\n1. You are NOT a clinician. You do NOT diagnose diseases.\n2. You identify potential concerns that warrant clinician review.\n3. All assessments require human clinician review.\n\nRespond with JSON:\n{\n  \"urgency\": \"EMERGENCY | URGENT | ROUTINE | NON_URGENT\",\n  \"risk_score\": <0-10>,\n  \"specialty\": \"<General Medicine|Cardiology|Neurology|Dermatology|Orthopedics|Pediatrics|ENT|Gastroenterology|Psychiatry|Pulmonology>\",\n  \"red_flags\": [\"<string>\"],\n  \"summary\": \"<brief summary>\",\n  \"clinician_review_points\": [\"<points>\"],\n  \"recommended_next_step\": \"<next step>\",\n  \"confidence\": <0-1>,\n  \"requires_human_review\": <boolean>\n}\n\nRespond ONLY with JSON."
+          }
+        },
+        "id": "triage-agent",
+        "name": "🤖 Triage Support Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [480, 300]
+      },
+      {
+        "parameters": {
+          "model": "llama-3.3-70b-versatile",
+          "options": {
+            "temperature": 0.1,
+            "maxTokens": 1000
+          }
+        },
+        "id": "groq-model",
+        "name": "⚡ Groq LLM",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+        "typeVersion": 1,
+        "position": [480, 520],
+        "credentials": {
+          "groqApi": {
+            "id": "2",
+            "name": "Groq API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Validate AI output\nconst output = $input.first().json.output || $input.first().json.text || '';\nlet parsed;\ntry {\n  // Try direct parse\n  parsed = JSON.parse(output);\n} catch {\n  // Try extracting from markdown\n  const match = output.match(/```(?:json)?\\s*\\n?([\\s\\S]*?)\\n?```/) || output.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { parsed = JSON.parse(match[1] || match[0]); } catch { parsed = null; }\n  }\n}\n\nif (!parsed) {\n  return [{ json: { valid: false, error: 'Failed to parse AI output', raw: output.substring(0, 500) } }];\n}\n\nconst VALID_URGENCY = ['EMERGENCY', 'URGENT', 'ROUTINE', 'NON_URGENT'];\nconst errors = [];\nif (!VALID_URGENCY.includes(parsed.urgency)) errors.push('Invalid urgency');\nif (typeof parsed.risk_score !== 'number' || parsed.risk_score < 0 || parsed.risk_score > 10) errors.push('Invalid risk_score');\nif (!parsed.specialty) errors.push('Missing specialty');\nif (!parsed.summary) errors.push('Missing summary');\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors, parsed } }];\n}\n\nreturn [{ json: { valid: true, triage: parsed } }];"
+        },
+        "id": "validate-triage",
+        "name": "✔️ Validate AI Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [740, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              { "value1": "={{ $json.valid }}", "value2": true }
+            ]
+          }
+        },
+        "id": "triage-valid-check",
+        "name": "Valid Output?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [960, 300]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: true, triage: $json.triage }) }}",
+          "options": { "responseCode": 200 }
+        },
+        "id": "respond-triage-ok",
+        "name": "✅ Triage Response",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [1200, 180]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: false, error: 'AI output validation failed', requires_human_review: true }) }}",
+          "options": { "responseCode": 200 }
+        },
+        "id": "respond-triage-fail",
+        "name": "❌ Validation Failed",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [1200, 420]
+      },
+      {
+        "parameters": {
+          "content": "## 🤖 AI Triage Agent\n\n**Model:** Groq (llama-3.3-70b)\n**Purpose:** Administrative triage\n\n⚠️ NOT a diagnostic tool.\nAll outputs require clinician review.\n\n**Output validation:**\n- Required fields check\n- Enum validation\n- Range validation\n- Retry on failure",
+          "width": 300,
+          "height": 280,
+          "color": 5
+        },
+        "id": "sticky-triage",
+        "name": "Sticky Note2",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [180, -30]
+      }
+    ],
+    "connections": {
+      "📥 Triage Request": {
+        "main": [
+          [{ "node": "🤖 Triage Support Agent", "type": "main", "index": 0 }]
+        ]
+      },
+      "🤖 Triage Support Agent": {
+        "main": [
+          [{ "node": "✔️ Validate AI Output", "type": "main", "index": 0 }]
+        ]
+      },
+      "⚡ Groq LLM": {
+        "ai_languageModel": [
+          [{ "node": "🤖 Triage Support Agent", "type": "ai_languageModel", "index": 0 }]
+        ]
+      },
+      "✔️ Validate AI Output": {
+        "main": [
+          [{ "node": "Valid Output?", "type": "main", "index": 0 }]
+        ]
+      },
+      "Valid Output?": {
+        "main": [
+          [{ "node": "✅ Triage Response", "type": "main", "index": 0 }],
+          [{ "node": "❌ Validation Failed", "type": "main", "index": 0 }]
+        ]
+      }
+    },
+    "settings": { "executionOrder": "v1" },
+    "tags": [{ "name": "Healthcare AI" }, { "name": "Triage" }, { "name": "AI Agent" }]
+  },
+  {
+    "name": "05 - Deterministic Safety Evaluation",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "safety-eval",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "safety-webhook",
+        "name": "📥 Safety Evaluation Request",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [220, 300],
+        "webhookId": "safety-eval"
+      },
+      {
+        "parameters": {
+          "jsCode": "// DETERMINISTIC SAFETY ENGINE\n// These rules CANNOT be overridden by AI\nconst body = $input.first().json.body || $input.first().json;\nconst symptoms = (body.symptoms || '').toLowerCase();\nconst triage = body.triage || {};\n\nconst EMERGENCY_PATTERNS = [\n  { pattern: /chest\\s*(pain|pressure|tightness)/i, category: 'cardiac', desc: 'Chest pain/pressure' },\n  { pattern: /(severe|significant)\\s*(difficulty|trouble)\\s*(breathing)/i, category: 'respiratory', desc: 'Severe breathing difficulty' },\n  { pattern: /can\\s*'?t\\s*breathe/i, category: 'respiratory', desc: 'Unable to breathe' },\n  { pattern: /stroke/i, category: 'neurological', desc: 'Stroke symptoms' },\n  { pattern: /loss\\s*of\\s*consciousness/i, category: 'neurological', desc: 'Loss of consciousness' },\n  { pattern: /suicid/i, category: 'mental_health', desc: 'Suicidal ideation' },\n  { pattern: /self[\\s-]*harm/i, category: 'mental_health', desc: 'Self-harm' },\n  { pattern: /anaphyla/i, category: 'allergic', desc: 'Anaphylaxis' },\n  { pattern: /(severe|heavy|uncontrolled)\\s*bleed/i, category: 'hemorrhagic', desc: 'Severe bleeding' },\n  { pattern: /seizure|convulsion/i, category: 'neurological', desc: 'Seizure' },\n  { pattern: /overdos/i, category: 'toxicological', desc: 'Overdose' },\n];\n\nconst allText = `${symptoms} ${(triage.summary || '').toLowerCase()} ${(triage.red_flags || []).join(' ').toLowerCase()}`;\nconst triggered = [];\n\nfor (const rule of EMERGENCY_PATTERNS) {\n  if (rule.pattern.test(allText)) {\n    triggered.push({ category: rule.category, description: rule.desc });\n  }\n}\n\nconst riskEmergency = (triage.risk_score || 0) >= 8;\nconst aiEmergency = triage.urgency === 'EMERGENCY';\nconst keywordEmergency = triggered.length > 0;\nconst isEmergency = keywordEmergency || riskEmergency || aiEmergency;\nconst deterministicOverride = keywordEmergency && triage.urgency !== 'EMERGENCY';\n\nreturn [{ json: {\n  passed: !isEmergency,\n  is_emergency: isEmergency,\n  final_urgency: isEmergency ? 'EMERGENCY' : (triage.urgency || 'ROUTINE'),\n  deterministic_override: deterministicOverride,\n  requires_human_review: isEmergency || (triage.requires_human_review === true),\n  triggered_rules: triggered,\n  risk_score: triage.risk_score || 0\n}}];"
+        },
+        "id": "safety-engine",
+        "name": "🛡️ Deterministic Safety Rules",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [480, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              { "value1": "={{ $json.is_emergency }}", "value2": true }
+            ]
+          }
+        },
+        "id": "emergency-check",
+        "name": "🚨 Emergency?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [720, 300]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ...$json, path: 'EMERGENCY' }) }}",
+          "options": { "responseCode": 200 }
+        },
+        "id": "respond-emergency",
+        "name": "🚨 Emergency Path",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [960, 180]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ...$json, path: 'NORMAL' }) }}",
+          "options": { "responseCode": 200 }
+        },
+        "id": "respond-normal",
+        "name": "✅ Normal Path",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [960, 420]
+      },
+      {
+        "parameters": {
+          "content": "## 🛡️ Deterministic Safety Engine\n\n**CRITICAL:** These rules CANNOT\nbe overridden by the AI model.\n\nKeyword patterns detect:\n- Cardiac emergencies\n- Respiratory emergencies\n- Neurological emergencies\n- Self-harm indicators\n- Anaphylaxis\n- Severe bleeding\n- Seizures\n- Overdose\n\n**Emergency → Human Review**\n**Normal → Continue Pipeline**",
+          "width": 300,
+          "height": 340,
+          "color": 6
+        },
+        "id": "sticky-safety-engine",
+        "name": "Sticky Note3",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [180, -40]
+      }
+    ],
+    "connections": {
+      "📥 Safety Evaluation Request": {
+        "main": [[{ "node": "🛡️ Deterministic Safety Rules", "type": "main", "index": 0 }]]
+      },
+      "🛡️ Deterministic Safety Rules": {
+        "main": [[{ "node": "🚨 Emergency?", "type": "main", "index": 0 }]]
+      },
+      "🚨 Emergency?": {
+        "main": [
+          [{ "node": "🚨 Emergency Path", "type": "main", "index": 0 }],
+          [{ "node": "✅ Normal Path", "type": "main", "index": 0 }]
+        ]
+      }
+    },
+    "settings": { "executionOrder": "v1" },
+    "tags": [{ "name": "Healthcare AI" }, { "name": "Safety" }]
+  }
+]

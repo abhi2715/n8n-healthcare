@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Detail — Healthcare AI Platform</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><div class="logo-icon">🏥</div> Healthcare AI Platform</a>
+      <ul class="nav-links">
+        <li><a href="/">Patient Intake</a></li>
+        <li><a href="/dashboard.html">Admin Dashboard</a></li>
+        <li><a href="/doctor.html">Doctor View</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="patient-content">
+      <div class="loading-overlay"><div class="spinner"></div> Loading patient data...</div>
+    </div>
+  </div>
+
+  <div class="disclaimer-bar">
+    ⚠️ PORTFOLIO PROJECT — Synthetic data only. AI content requires clinician review.
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (!id) { document.getElementById('patient-content').innerHTML = '<p>No patient ID provided</p>'; return; }
+      
+      try {
+        const data = await api(`/patients/${id}`);
+        const p = data.patient;
+        const container = document.getElementById('patient-content');
+        
+        container.innerHTML = `
+          <div class="page-header">
+            <h1>${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</h1>
+            <p>${escapeHtml(p.email)} • Age: ${p.age || '—'} • ${escapeHtml(p.gender || '—')}</p>
+          </div>
+          
+          <div class="grid-3" style="margin-bottom: var(--space-2xl);">
+            <div class="card">
+              <h3 class="card-title" style="margin-bottom: var(--space-md);">📋 Medical History</h3>
+              ${data.medical_history.length > 0 
+                ? data.medical_history.map(h => `<div class="tag">${escapeHtml(h.condition_name)}</div>`).join(' ')
+                : '<p style="color: var(--text-muted);">No conditions recorded</p>'}
+            </div>
+            <div class="card">
+              <h3 class="card-title" style="margin-bottom: var(--space-md);">💊 Medications</h3>
+              ${data.medications.length > 0
+                ? data.medications.map(m => `<p style="font-size: var(--font-size-sm);"><strong>${escapeHtml(m.medication_name)}</strong> ${escapeHtml(m.dosage || '')} ${escapeHtml(m.frequency || '')}</p>`).join('')
+                : '<p style="color: var(--text-muted);">No medications recorded</p>'}
+            </div>
+            <div class="card">
+              <h3 class="card-title" style="margin-bottom: var(--space-md);">⚠️ Allergies</h3>
+              ${data.allergies.length > 0
+                ? data.allergies.map(a => `<div class="tag" style="border-color: rgba(239, 68, 68, 0.3);">${escapeHtml(a.allergen)} (${a.severity})</div>`).join(' ')
+                : '<p style="color: var(--text-muted);">No allergies recorded</p>'}
+            </div>
+          </div>
+          
+          <div class="card" style="margin-bottom: var(--space-2xl);">
+            <h3 class="card-title" style="margin-bottom: var(--space-md);">📅 Appointments</h3>
+            ${data.appointments.length > 0 ? `
+              <div class="table-wrap"><table>
+                <thead><tr><th>Date</th><th>Time</th><th>Doctor</th><th>Specialty</th><th>Status</th><th>Urgency</th></tr></thead>
+                <tbody>${data.appointments.map(a => `
+                  <tr>
+                    <td>${formatDate(a.appointment_date)}</td>
+                    <td>${a.start_time}</td>
+                    <td>Dr. ${escapeHtml(a.doctor_first_name || '')} ${escapeHtml(a.doctor_last_name || '')}</td>
+                    <td>${escapeHtml(a.specialty_name || '—')}</td>
+                    <td>${statusBadge(a.status)}</td>
+                    <td>${a.urgency ? urgencyBadge(a.urgency) : '—'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table></div>` : '<p style="color: var(--text-muted);">No appointments</p>'}
+          </div>
+          
+          <div class="card">
+            <h3 class="card-title" style="margin-bottom: var(--space-md);">🔬 Triage Assessments</h3>
+            ${data.triage_assessments.length > 0 ? data.triage_assessments.map(t => `
+              <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-sm);">
+                  ${urgencyBadge(t.urgency)} <span style="color: var(--text-muted); font-size: var(--font-size-xs);">${formatDateTime(t.created_at)}</span>
+                </div>
+                <div class="ai-disclaimer" style="margin-bottom: var(--space-sm);">⚠️ AI-Generated — Requires clinician review</div>
+                <p style="font-size: var(--font-size-sm);">${escapeHtml(t.summary || '')}</p>
+                <p style="font-size: var(--font-size-xs); color: var(--text-muted); margin-top: var(--space-sm);">
+                  Risk: ${t.risk_score} • Confidence: ${t.confidence} • Specialty: ${escapeHtml(t.specialty_recommended || '—')}
+                  ${t.deterministic_override ? ' • <span style="color: var(--accent-danger);">⚡ Safety Override</span>' : ''}
+                </p>
+              </div>`).join('')
+            : '<p style="color: var(--text-muted);">No triage assessments</p>'}
+          </div>
+        `;
+      } catch (err) {
+        document.getElementById('patient-content').innerHTML = `<p style="color: var(--accent-danger);">Error: ${err.message}</p>`;
+      }
+    });
+  </script>
+</body>
+</html>

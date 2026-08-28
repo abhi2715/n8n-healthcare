@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Healthcare AI Platform — Admin Dashboard. View patient statistics, appointments, triage distribution, and manage human review tasks.">
+  <title>Admin Dashboard — Healthcare AI Platform</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><div class="logo-icon">🏥</div> Healthcare AI Platform</a>
+      <ul class="nav-links">
+        <li><a href="/">Patient Intake</a></li>
+        <li><a href="/dashboard.html" class="active">Admin Dashboard</a></li>
+        <li><a href="/doctor.html">Doctor View</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Admin Dashboard</h1>
+      <p>Real-time overview of the healthcare automation platform</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div id="stats-grid" class="stats-grid">
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Loading...</div></div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid-2" style="margin-bottom: var(--space-2xl);">
+      <!-- Recent Intakes -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📋 Recent Intakes</h3>
+          <button class="btn btn-sm btn-secondary" onclick="loadDashboard()">↻ Refresh</button>
+        </div>
+        <div id="recent-intakes">
+          <div class="loading-overlay"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Human Review Queue -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">👁️ Human Review Queue</h3>
+          <span id="review-count" class="badge badge-pending">0</span>
+        </div>
+        <div id="review-queue">
+          <div class="loading-overlay"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Distribution Charts (text-based) -->
+    <div class="grid-2" style="margin-bottom: var(--space-2xl);">
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom: var(--space-md);">📊 Triage Distribution</h3>
+        <div id="triage-distribution"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom: var(--space-md);">🏥 Specialty Distribution</h3>
+        <div id="specialty-distribution"></div>
+      </div>
+    </div>
+
+    <!-- Audit Trail -->
+    <div class="card" style="margin-bottom: var(--space-2xl);">
+      <div class="card-header">
+        <h3 class="card-title">📝 Recent Audit Events</h3>
+      </div>
+      <div id="audit-trail"></div>
+    </div>
+
+    <!-- Patient List -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">👥 Patients</h3>
+        <input type="text" id="patient-search" class="form-input" style="max-width: 250px;" placeholder="Search patients...">
+      </div>
+      <div id="patient-list">
+        <div class="loading-overlay"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer-bar">
+    ⚠️ PORTFOLIO PROJECT — Uses synthetic data only. Not HIPAA compliant. AI-generated content is clearly labeled and requires clinician review.
+  </div>
+
+  <!-- Review Modal -->
+  <div id="review-modal" class="modal-backdrop">
+    <div class="modal">
+      <h3 class="modal-title" id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div style="display: flex; gap: var(--space-md); margin-top: var(--space-lg);">
+        <button class="btn btn-primary" onclick="resolveReview('APPROVED')">✅ Approve</button>
+        <button class="btn btn-danger" onclick="resolveReview('REJECTED')">❌ Reject</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

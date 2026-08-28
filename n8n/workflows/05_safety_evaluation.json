@@ -1,0 +1,158 @@
+{
+  "name": "05 - Deterministic Safety Evaluation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "safety-eval",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "safety-webhook",
+      "name": "📥 Safety Evaluation Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "safety-eval"
+    },
+    {
+      "parameters": {
+        "jsCode": "// DETERMINISTIC SAFETY ENGINE\n// These rules CANNOT be overridden by AI\nconst body = $input.first().json.body || $input.first().json;\nconst symptoms = (body.symptoms || '').toLowerCase();\nconst triage = body.triage || {};\n\nconst EMERGENCY_PATTERNS = [\n  { pattern: /chest\\s*(pain|pressure|tightness)/i, category: 'cardiac', desc: 'Chest pain/pressure' },\n  { pattern: /(severe|significant)\\s*(difficulty|trouble)\\s*(breathing)/i, category: 'respiratory', desc: 'Severe breathing difficulty' },\n  { pattern: /can\\s*'?t\\s*breathe/i, category: 'respiratory', desc: 'Unable to breathe' },\n  { pattern: /stroke/i, category: 'neurological', desc: 'Stroke symptoms' },\n  { pattern: /loss\\s*of\\s*consciousness/i, category: 'neurological', desc: 'Loss of consciousness' },\n  { pattern: /suicid/i, category: 'mental_health', desc: 'Suicidal ideation' },\n  { pattern: /self[\\s-]*harm/i, category: 'mental_health', desc: 'Self-harm' },\n  { pattern: /anaphyla/i, category: 'allergic', desc: 'Anaphylaxis' },\n  { pattern: /(severe|heavy|uncontrolled)\\s*bleed/i, category: 'hemorrhagic', desc: 'Severe bleeding' },\n  { pattern: /seizure|convulsion/i, category: 'neurological', desc: 'Seizure' },\n  { pattern: /overdos/i, category: 'toxicological', desc: 'Overdose' },\n];\n\nconst allText = `${symptoms} ${(triage.summary || '').toLowerCase()} ${(triage.red_flags || []).join(' ').toLowerCase()}`;\nconst triggered = [];\n\nfor (const rule of EMERGENCY_PATTERNS) {\n  if (rule.pattern.test(allText)) {\n    triggered.push({ category: rule.category, description: rule.desc });\n  }\n}\n\nconst riskEmergency = (triage.risk_score || 0) >= 8;\nconst aiEmergency = triage.urgency === 'EMERGENCY';\nconst keywordEmergency = triggered.length > 0;\nconst isEmergency = keywordEmergency || riskEmergency || aiEmergency;\nconst deterministicOverride = keywordEmergency && triage.urgency !== 'EMERGENCY';\n\nreturn [{ json: {\n  passed: !isEmergency,\n  is_emergency: isEmergency,\n  final_urgency: isEmergency ? 'EMERGENCY' : (triage.urgency || 'ROUTINE'),\n  deterministic_override: deterministicOverride,\n  requires_human_review: isEmergency || (triage.requires_human_review === true),\n  triggered_rules: triggered,\n  risk_score: triage.risk_score || 0\n}}];"
+      },
+      "id": "safety-engine",
+      "name": "🛡️ Deterministic Safety Rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_emergency }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "emergency-check",
+      "name": "🚨 Emergency?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ...$json, path: 'EMERGENCY' }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-emergency",
+      "name": "🚨 Emergency Path",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        960,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ...$json, path: 'NORMAL' }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-normal",
+      "name": "✅ Normal Path",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        960,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🛡️ Deterministic Safety Engine\n\n**CRITICAL:** These rules CANNOT\nbe overridden by the AI model.\n\nKeyword patterns detect:\n- Cardiac emergencies\n- Respiratory emergencies\n- Neurological emergencies\n- Self-harm indicators\n- Anaphylaxis\n- Severe bleeding\n- Seizures\n- Overdose\n\n**Emergency → Human Review**\n**Normal → Continue Pipeline**",
+        "width": 300,
+        "height": 340,
+        "color": 6
+      },
+      "id": "sticky-safety-engine",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        -40
+      ]
+    }
+  ],
+  "connections": {
+    "📥 Safety Evaluation Request": {
+      "main": [
+        [
+          {
+            "node": "🛡️ Deterministic Safety Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Deterministic Safety Rules": {
+      "main": [
+        [
+          {
+            "node": "🚨 Emergency?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚨 Emergency?": {
+      "main": [
+        [
+          {
+            "node": "🚨 Emergency Path",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✅ Normal Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Healthcare AI"
+    },
+    {
+      "name": "Safety"
+    }
+  ]
+}

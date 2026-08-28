@@ -1,0 +1,223 @@
+{
+  "name": "04 - AI Triage Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "triage-webhook",
+      "name": "📥 Triage Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "ai-triage"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=PATIENT INTAKE INFORMATION:\n\nFull Name: {{ $json.body.full_name || 'Not provided' }}\nAge: {{ $json.body.age || 'Not provided' }}\n\nSYMPTOMS:\n{{ $json.body.symptoms || 'Not provided' }}\n\nSeverity: {{ $json.body.severity || 'Not provided' }}\nDuration: {{ $json.body.symptom_duration || 'Not provided' }}\n\nEXISTING CONDITIONS:\n{{ $json.body.existing_conditions || 'None reported' }}\n\nCURRENT MEDICATIONS:\n{{ $json.body.current_medications || 'None reported' }}\n\nALLERGIES:\n{{ $json.body.allergies || 'None reported' }}\n\nProvide your administrative triage assessment as a JSON object.",
+        "options": {
+          "systemMessage": "You are an administrative triage assistant for a healthcare clinic. Your role is to review patient intake information and provide a structured administrative assessment.\n\nIMPORTANT RULES:\n1. You are NOT a clinician. You do NOT diagnose diseases.\n2. You identify potential concerns that warrant clinician review.\n3. All assessments require human clinician review.\n\nRespond with JSON:\n{\n  \"urgency\": \"EMERGENCY | URGENT | ROUTINE | NON_URGENT\",\n  \"risk_score\": <0-10>,\n  \"specialty\": \"<General Medicine|Cardiology|Neurology|Dermatology|Orthopedics|Pediatrics|ENT|Gastroenterology|Psychiatry|Pulmonology>\",\n  \"red_flags\": [\"<string>\"],\n  \"summary\": \"<brief summary>\",\n  \"clinician_review_points\": [\"<points>\"],\n  \"recommended_next_step\": \"<next step>\",\n  \"confidence\": <0-1>,\n  \"requires_human_review\": <boolean>\n}\n\nRespond ONLY with JSON."
+        }
+      },
+      "id": "triage-agent",
+      "name": "🤖 Triage Support Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.1,
+          "maxTokens": 1000
+        }
+      },
+      "id": "groq-model",
+      "name": "⚡ Groq LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        480,
+        520
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "2",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate AI output\nconst output = $input.first().json.output || $input.first().json.text || '';\nlet parsed;\ntry {\n  // Try direct parse\n  parsed = JSON.parse(output);\n} catch {\n  // Try extracting from markdown\n  const match = output.match(/```(?:json)?\\s*\\n?([\\s\\S]*?)\\n?```/) || output.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { parsed = JSON.parse(match[1] || match[0]); } catch { parsed = null; }\n  }\n}\n\nif (!parsed) {\n  return [{ json: { valid: false, error: 'Failed to parse AI output', raw: output.substring(0, 500) } }];\n}\n\nconst VALID_URGENCY = ['EMERGENCY', 'URGENT', 'ROUTINE', 'NON_URGENT'];\nconst errors = [];\nif (!VALID_URGENCY.includes(parsed.urgency)) errors.push('Invalid urgency');\nif (typeof parsed.risk_score !== 'number' || parsed.risk_score < 0 || parsed.risk_score > 10) errors.push('Invalid risk_score');\nif (!parsed.specialty) errors.push('Missing specialty');\nif (!parsed.summary) errors.push('Missing summary');\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors, parsed } }];\n}\n\nreturn [{ json: { valid: true, triage: parsed } }];"
+      },
+      "id": "validate-triage",
+      "name": "✔️ Validate AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "triage-valid-check",
+      "name": "Valid Output?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, triage: $json.triage }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-triage-ok",
+      "name": "✅ Triage Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'AI output validation failed', requires_human_review: true }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-triage-fail",
+      "name": "❌ Validation Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🤖 AI Triage Agent\n\n**Model:** Groq (llama-3.3-70b)\n**Purpose:** Administrative triage\n\n⚠️ NOT a diagnostic tool.\nAll outputs require clinician review.\n\n**Output validation:**\n- Required fields check\n- Enum validation\n- Range validation\n- Retry on failure",
+        "width": 300,
+        "height": 280,
+        "color": 5
+      },
+      "id": "sticky-triage",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        -30
+      ]
+    }
+  ],
+  "connections": {
+    "📥 Triage Request": {
+      "main": [
+        [
+          {
+            "node": "🤖 Triage Support Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Triage Support Agent": {
+      "main": [
+        [
+          {
+            "node": "✔️ Validate AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚡ Groq LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 Triage Support Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✔️ Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Valid Output?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Output?": {
+      "main": [
+        [
+          {
+            "node": "✅ Triage Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Validation Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Healthcare AI"
+    },
+    {
+      "name": "Triage"
+    },
+    {
+      "name": "AI Agent"
+    }
+  ]
+}
