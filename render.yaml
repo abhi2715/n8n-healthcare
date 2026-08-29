@@ -67,6 +67,8 @@ services:
         sync: false
       - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
         value: "false"
+      - key: DB_POSTGRESDB_MAX_CONNECTIONS
+        value: "10"
         
       # Performance / Limitations for Free Tier
       - key: NODE_OPTIONS
