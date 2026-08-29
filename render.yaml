@@ -63,6 +63,8 @@ services:
         value: "5432"
       - key: DB_POSTGRESDB_USER
         sync: false
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: "false"
         
       # Performance / Limitations for Free Tier
       - key: EXECUTIONS_DATA_PRUNE
