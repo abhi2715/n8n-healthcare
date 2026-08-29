@@ -5,5 +5,4 @@ USER root
 RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
 USER node
 
-# Start n8n
-CMD ["n8n"]
+# We do not override the CMD so n8n starts normally with its default entrypoint
