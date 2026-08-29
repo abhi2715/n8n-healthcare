@@ -46,7 +46,7 @@ services:
       - key: PORT
         value: "5678"
       - key: N8N_PROTOCOL
-        value: "https"
+        value: "http"
       - key: WEBHOOK_URL
         sync: false # E.g., https://healthcare-n8n.onrender.com
       - key: N8N_ENCRYPTION_KEY
