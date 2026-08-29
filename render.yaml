@@ -39,7 +39,7 @@ services:
         sync: false
         
       # n8n General Configuration
-      - key: N8N_HOST
+      - key: N8N_LISTEN_ADDRESS
         value: "0.0.0.0"
       - key: N8N_PORT
         value: "5678"
@@ -47,7 +47,7 @@ services:
         value: "5678"
       - key: N8N_PROTOCOL
         value: "http"
-      - key: WEBHOOK_URL
+      - key: N8N_WEBHOOK_URL
         sync: false # E.g., https://healthcare-n8n.onrender.com
       - key: N8N_ENCRYPTION_KEY
         sync: false # Needs a random string
