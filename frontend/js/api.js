@@ -4,7 +4,7 @@
 // Determine backend URL based on environment
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 // IMPORTANT: Update this URL with your actual Render backend URL after deployment
-const API_BASE = isLocalhost ? '/api' : 'https://YOUR_RENDER_BACKEND_URL.onrender.com/api';
+const API_BASE = isLocalhost ? '/api' : 'https://healthcare-backend-1c5c.onrender.com/api';
 
 async function api(path, options = {}) {
   const url = `${API_BASE}${path}`;
