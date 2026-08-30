@@ -57,12 +57,12 @@ services:
         value: "5432"
       - key: DB_POSTGRESDB_USER
         sync: false
-      - key: DB_POSTGRESDB_SSL
+      - key: DB_POSTGRESDB_SSL_ENABLED
         value: "true"
       - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
         value: "false"
       - key: DB_POSTGRESDB_MAX_CONNECTIONS
-        value: "10"
+        value: "50"
         
       # Performance / Limitations for Free Tier
       - key: NODE_OPTIONS
