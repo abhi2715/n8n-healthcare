@@ -62,7 +62,9 @@ services:
       - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
         value: "false"
       - key: DB_POSTGRESDB_MAX_CONNECTIONS
-        value: "50"
+        value: "5"
+      - key: DB_PING_TIMEOUT_MS
+        value: "30000"
         
       # Performance / Limitations for Free Tier
       - key: NODE_OPTIONS
