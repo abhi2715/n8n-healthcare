@@ -30,14 +30,6 @@ services:
     dockerfilePath: ./Dockerfile.n8n
     plan: free
     envVars:
-      # n8n Basic Authentication
-      - key: N8N_BASIC_AUTH_ACTIVE
-        value: "true"
-      - key: N8N_BASIC_AUTH_USER
-        sync: false
-      - key: N8N_BASIC_AUTH_PASSWORD
-        sync: false
-        
       # n8n General Configuration
       - key: N8N_LISTEN_ADDRESS
         value: "0.0.0.0"
