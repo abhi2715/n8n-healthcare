@@ -73,6 +73,8 @@ services:
         value: "false"
       - key: N8N_VERSION_NOTIFICATIONS_ENABLED
         value: "false"
+      - key: N8N_RUNNERS_ENABLED
+        value: "false"
       - key: EXECUTIONS_DATA_SAVE_ON_SUCCESS
         value: "none"
       - key: N8N_DEFAULT_BINARY_DATA_MODE
