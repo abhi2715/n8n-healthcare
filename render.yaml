@@ -68,7 +68,11 @@ services:
         
       # Performance / Limitations for Free Tier
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=400"
+        value: "--max-old-space-size=300"
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_VERSION_NOTIFICATIONS_ENABLED
+        value: "false"
       - key: EXECUTIONS_DATA_SAVE_ON_SUCCESS
         value: "none"
       - key: N8N_DEFAULT_BINARY_DATA_MODE
